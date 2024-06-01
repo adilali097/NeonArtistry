@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Falam Drawing App</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <link rel="manifest" href="manifest.json">
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            text-align: center;
+            font-family: 'Arial', sans-serif;
+        }
+        .toolbar {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .toolbar button, .toolbar input {
+            margin: 5px;
+        }
+        #drawingCanvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #222;
+            border: 2px solid #00ffff;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="my-4">Neon Falam Drawing App</h1>
+        <div class="toolbar mb-3">
+            <button id="pen" class="btn btn-primary">Pen</button>
+            <button id="eraser" class="btn btn-secondary">Eraser</button>
+            <input type="color" id="colorPicker" class="btn btn-light">
+            <input type="range" id="brushSize" min="1" max="20" value="5" class="btn btn-light">
+            <button id="clearCanvas" class="btn btn-danger">Clear Canvas</button>
+            <button id="undo" class="btn btn-warning">Undo</button>
+            <button id="save" class="btn btn-success">Save</button>
+        </div>
+        <canvas id="drawingCanvas" width="800" height="600"></canvas>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let drawing = false;
+        let currentTool = 'pen';
+        let brushColor = '#00ff00';
+        let brushSize = 5;
+        let paths = [];
+        let currentPath = [];
+
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+        canvas.addEventListener('mousemove', draw);
+
+        document.getElementById('pen').addEventListener('click', () => setTool('pen'));
+        document.getElementById('eraser').addEventListener('click', () => setTool('eraser'));
+        document.getElementById('colorPicker').addEventListener('input', (e) => brushColor = e.target.value);
+        document.getElementById('brushSize').addEventListener('input', (e) => brushSize = e.target.value);
+        document.getElementById('clearCanvas').addEventListener('click', clearCanvas);
+        document.getElementById('undo').addEventListener('click', undo);
+        document.getElementById('save').addEventListener('click', save);
+
+        function startDrawing(e) {
+            drawing = true;
+            currentPath = [];
+            paths.push({ tool: currentTool, color: brushColor, size: brushSize, path: currentPath });
+            draw(e);
+        }
+
+        function stopDrawing() {
+            drawing = false;
+        }
+
+        function draw(e) {
+            if (!drawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            currentPath.push({ x, y });
+
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = brushColor;
+
+            ctx.strokeStyle = currentTool === 'pen' ? brushColor : '#222';
+            ctx.lineWidth = brushSize;
+
+            ctx.beginPath();
+            if (currentPath.length > 1) {
+                ctx.moveTo(currentPath[currentPath.length - 2].x, currentPath[currentPath.length - 2].y);
+            } else {
+                ctx.moveTo(x, y);
+            }
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        function setTool(tool) {
+            currentTool = tool;
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            paths = [];
+        }
+
+        function undo() {
+            paths.pop();
+            redraw();
+        }
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            paths.forEach(item => {
+                ctx.strokeStyle = item.tool === 'pen' ? item.color : '#222';
+                ctx.lineWidth = item.size;
+                ctx.shadowColor = item.color;
+                ctx.beginPath();
+                item.path.forEach((point, index) => {
+                    if (index === 0) {
+                        ctx.moveTo(point.x, point.y);
+                    } else {
+                        ctx.lineTo(point.x, point.y);
+                    }
+                    ctx.stroke();
+                });
+            });
+        }
+
+        function save() {
+            const link = document.createElement('a');
+            link.download = 'neon-drawing.png';
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        // Register service worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js').then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                }, err => {
+                    console.log('ServiceWorker registration failed: ', err);
+                });
+            });
+        }
+    </script>
+
+    <!-- Service Worker -->
+    <script>
+        const CACHE_NAME = 'neon-falam-drawing-cache-v1';
+        const urlsToCache = [
+            '/',
+            '/index.html',
+            'https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css'
+        ];
+
+        self.addEventListener('install', event => {
+            event.waitUntil(
+                caches.open(CACHE_NAME)
+                    .then(cache => {
+                        return cache.addAll(urlsToCache);
+                    })
+            );
+        });
+
+        self.addEventListener('fetch', event => {
+            event.respondWith(
+                caches.match(event.request)
+                    .then(response => {
+                        return response || fetch(event.request);
+                    })
+            );
+        });
+    </script>
+
+    <!-- Manifest -->
+    <script type="application/json">
+        {
+            "name": "Neon Falam Drawing App",
+            "short_name": "NeonDrawing",
+            "start_url": "/",
+            "display": "standalone",
+            "background_color": "#121212",
+            "theme_color": "#00ffff",
+            "icons": [
+                {
+                    "src": "icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                },
+                {
+                    "src": "icon-512.png",
+                    "sizes": "512x512",
+                    "type": "image/png"
+                }
+            ]
+        }
+    </script>
+</body>
+</html>
